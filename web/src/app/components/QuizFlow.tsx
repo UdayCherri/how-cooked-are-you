@@ -1,61 +1,102 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useState } from "react";
-import { QUESTIONS, type Answer } from "../data/quizData";
+import { useMemo, useState } from "react";
+import type { ApiAnswer, ApiQuestion } from "../lib/api";
 
 interface QuizFlowProps {
-  onComplete: (answers: number[]) => void;
+  questions: ApiQuestion[];
+  onComplete: (answers: ApiAnswer[]) => void;
   onBack: () => void;
 }
 
-const PROGRESS_COLORS = [
-  "#FF6B6B", "#FFE66D", "#6BCB77", "#4D96FF", "#B983FF",
-  "#FF6B6B", "#FFE66D", "#6BCB77", "#4D96FF", "#B983FF",
+const PALETTE = ["#FF6B6B", "#FFE66D", "#6BCB77", "#4D96FF", "#B983FF"] as const;
+const ANSWER_COLORS = ["#FF6B6B", "#FFE66D", "#6BCB77", "#B983FF"];
+const ANSWER_EMOJIS = ["🥱", "😬", "😵‍💫", "💀"];
+
+const QUIPS = [
+  "there are no wrong answers (there are wrong answers)",
+  "be honest. we already know.",
+  "your results are judging you gently",
+  "the algorithm feels things",
+  "no going back (there is going back)",
+  "your brain is being scanned rn",
+  "certified diagnostic technology",
+  "we see you. we don't judge. (we judge a little)",
+  "science is happening",
+  "your therapist would be so interested in this",
+  "we are reading you like a poorly redacted PDF",
+  "blink twice if you want to lie",
+  "this question was designed by a goblin",
+  "approximately none of this is real",
+  "the cooking is in progress",
 ];
 
-export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
+const SECTION_EMOJIS = ["🧠", "📱", "🌙", "🍳", "💔", "🎭", "🌀", "👁️", "🫠", "🐀", "💻", "🌿", "🔮", "📜", "🎢"];
+
+export function QuizFlow({ questions, onComplete, onBack }: QuizFlowProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [answers, setAnswers] = useState<ApiAnswer[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const question = QUESTIONS[currentIndex];
-  const progressPercent = Math.round((currentIndex / QUESTIONS.length) * 100);
+  const question = questions[currentIndex];
+  const total = questions.length;
+  const progressPercent = total > 0 ? Math.round((currentIndex / total) * 100) : 0;
 
-  const handleSelectAnswer = (answer: Answer, answerIndex: number) => {
+  const accent = useMemo(() => PALETTE[currentIndex % PALETTE.length], [currentIndex]);
+  const sectionEmoji = useMemo(
+    () => SECTION_EMOJIS[currentIndex % SECTION_EMOJIS.length],
+    [currentIndex]
+  );
+
+  if (!question) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: "#0D0D0D", color: "#888" }}
+      >
+        no questions to ask (which is, itself, a question)
+      </div>
+    );
+  }
+
+  const handleSelect = (choiceId: string) => {
     if (isTransitioning) return;
-    setSelectedAnswer(answerIndex);
+    setSelected(choiceId);
     setIsTransitioning(true);
 
+    const nextAnswers: ApiAnswer[] = [...answers, { qid: question.id, choiceId }];
+
     setTimeout(() => {
-      const newAnswers = [...answers, answer.cookedness];
-      if (currentIndex === QUESTIONS.length - 1) {
-        onComplete(newAnswers);
-      } else {
-        setTimeout(() => {
-          setCurrentIndex((i) => i + 1);
-          setSelectedAnswer(null);
-          setIsTransitioning(false);
-        }, 350);
+      if (currentIndex === total - 1) {
+        onComplete(nextAnswers);
+        return;
       }
-    }, 400);
+      setTimeout(() => {
+        setAnswers(nextAnswers);
+        setCurrentIndex((i) => i + 1);
+        setSelected(null);
+        setIsTransitioning(false);
+      }, 320);
+    }, 380);
   };
 
   const handleBack = () => {
     if (currentIndex === 0) {
       onBack();
-    } else {
-      setCurrentIndex((i) => i - 1);
-      setAnswers((a) => a.slice(0, -1));
-      setSelectedAnswer(null);
+      return;
     }
+    setCurrentIndex((i) => i - 1);
+    setAnswers((a) => a.slice(0, -1));
+    setSelected(null);
   };
+
+  const quip = QUIPS[currentIndex % QUIPS.length];
 
   return (
     <div
       className="min-h-screen flex flex-col"
       style={{ background: "#0D0D0D", fontFamily: "'DM Sans', sans-serif" }}
     >
-      {/* Progress bar row */}
       <div className="relative z-20 px-4 pt-4 pb-2">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <button
@@ -71,7 +112,7 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
             ← back
           </button>
           <div className="flex-1 flex gap-1">
-            {QUESTIONS.map((_, i) => (
+            {questions.map((_, i) => (
               <div
                 key={i}
                 className="flex-1 h-2 rounded-full overflow-hidden"
@@ -84,7 +125,7 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
                     width: i < currentIndex ? "100%" : i === currentIndex ? "50%" : "0%",
                   }}
                   transition={{ duration: 0.4, ease: "easeOut" }}
-                  style={{ background: PROGRESS_COLORS[i] }}
+                  style={{ background: PALETTE[i % PALETTE.length] }}
                 />
               </div>
             ))}
@@ -103,7 +144,6 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
         </div>
       </div>
 
-      {/* Question number + icon */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
         <div className="max-w-2xl w-full mx-auto flex flex-col gap-6">
           <AnimatePresence mode="wait">
@@ -114,43 +154,38 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
               exit={{ opacity: 0, x: -60, rotate: -2 }}
               transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
             >
-              {/* Question card */}
               <div
                 className="relative rounded-3xl p-6 sm:p-8 mb-6 overflow-hidden"
                 style={{
                   background: "#1A1A1A",
-                  border: `3px solid ${question.color}`,
-                  boxShadow: `0 0 40px ${question.color}20, 6px 6px 0px ${question.color}40`,
+                  border: `3px solid ${accent}`,
+                  boxShadow: `0 0 40px ${accent}20, 6px 6px 0px ${accent}40`,
                 }}
               >
-                {/* Corner decoration */}
                 <div
                   className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-10"
-                  style={{ background: question.color }}
+                  style={{ background: accent }}
                 />
 
-                {/* Q number badge */}
                 <div className="flex items-center gap-3 mb-5">
                   <span
                     className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm"
                     style={{
-                      background: `${question.color}25`,
-                      border: `1.5px solid ${question.color}60`,
-                      color: question.color,
+                      background: `${accent}25`,
+                      border: `1.5px solid ${accent}60`,
+                      color: accent,
                       fontFamily: "'Space Mono', monospace",
                     }}
                   >
                     {currentIndex + 1}
                   </span>
                   <span style={{ color: "#555", fontSize: "0.75rem", fontFamily: "'Space Mono', monospace" }}>
-                    of {QUESTIONS.length}
+                    of {total}
                   </span>
                 </div>
 
-                {/* Emoji */}
-                <div className="text-5xl mb-4">{question.emoji}</div>
+                <div className="text-5xl mb-4">{sectionEmoji}</div>
 
-                {/* Question text */}
                 <h2
                   style={{
                     fontFamily: "'Fredoka', sans-serif",
@@ -160,21 +195,20 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
                     lineHeight: 1.25,
                   }}
                 >
-                  {question.text}
+                  {question.prompt}
                 </h2>
               </div>
 
-              {/* Answer cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {question.answers.map((answer, i) => {
-                  const answerColors = ["#FF6B6B", "#FFE66D", "#6BCB77", "#B983FF"];
-                  const color = answerColors[i];
-                  const isSelected = selectedAnswer === i;
+                {question.choices.map((choice, i) => {
+                  const color = ANSWER_COLORS[i % ANSWER_COLORS.length] as string;
+                  const emoji = ANSWER_EMOJIS[i % ANSWER_EMOJIS.length];
+                  const isSelected = selected === choice.id;
 
                   return (
                     <motion.button
-                      key={i}
-                      onClick={() => handleSelectAnswer(answer, i)}
+                      key={choice.id}
+                      onClick={() => handleSelect(choice.id)}
                       disabled={isTransitioning}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -197,7 +231,7 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
                           style={{ background: `${color}08` }}
                         />
                       )}
-                      <span className="text-2xl block mb-2">{answer.emoji}</span>
+                      <span className="text-2xl block mb-2">{emoji}</span>
                       <span
                         className="relative text-sm sm:text-base leading-snug"
                         style={{
@@ -205,7 +239,7 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
                           fontWeight: isSelected ? 700 : 400,
                         }}
                       >
-                        {answer.text}
+                        {choice.label}
                       </span>
                       {isSelected && (
                         <motion.span
@@ -224,27 +258,15 @@ export function QuizFlow({ onComplete, onBack }: QuizFlowProps) {
             </motion.div>
           </AnimatePresence>
 
-          {/* Fun quip at bottom */}
           <motion.p
-            key={currentIndex}
+            key={`quip-${currentIndex}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
             className="text-center"
             style={{ color: "#333", fontSize: "0.72rem", fontFamily: "'Space Mono', monospace" }}
           >
-            {[
-              "there are no wrong answers (there are wrong answers)",
-              "be honest. we already know.",
-              "your results are judging you gently",
-              "the algorithm feels things",
-              "no going back (there is going back)",
-              "your brain is being scanned rn",
-              "certified diagnostic technology",
-              "we see you. we don't judge. (we judge a little)",
-              "science is happening",
-              "your therapist would be so interested in this",
-            ][currentIndex]}
+            {quip}
           </motion.p>
         </div>
       </div>

@@ -6,6 +6,9 @@ interface LandingPageProps {
   onStart: () => void;
   onHistory: () => void;
   historyCount: number;
+  questionCount: number;
+  noticeMsg?: string | null;
+  onDismissNotice?: () => void;
 }
 
 const TICKER_ITEMS = [
@@ -23,7 +26,14 @@ const WARNING_MESSAGES = [
   "⚠️ NOTICE: The algorithm knows. It has always known.",
 ];
 
-export function LandingPage({ onStart, onHistory, historyCount }: LandingPageProps) {
+export function LandingPage({
+  onStart,
+  onHistory,
+  historyCount,
+  questionCount,
+  noticeMsg,
+  onDismissNotice,
+}: LandingPageProps) {
   const [tickerIndex, setTickerIndex] = useState(0);
   const [warningIndex, setWarningIndex] = useState(0);
   const [btnHover, setBtnHover] = useState(false);
@@ -48,6 +58,46 @@ export function LandingPage({ onStart, onHistory, historyCount }: LandingPagePro
       style={{ background: "#0D0D0D", fontFamily: "'DM Sans', sans-serif" }}
     >
       <FloatingStickers count={20} />
+
+      {noticeMsg && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="relative z-30 w-full px-4 py-2 flex items-center justify-center gap-2"
+          style={{
+            background: "rgba(255,107,107,0.12)",
+            borderBottom: "1px solid rgba(255,107,107,0.25)",
+          }}
+        >
+          <span
+            style={{
+              color: "#FF6B6B",
+              fontSize: "0.72rem",
+              fontFamily: "'Space Mono', monospace",
+              textAlign: "center",
+            }}
+          >
+            ⚠ {noticeMsg}
+          </span>
+          {onDismissNotice && (
+            <button
+              onClick={onDismissNotice}
+              aria-label="dismiss"
+              className="px-2 cursor-pointer"
+              style={{
+                color: "#FF6B6B",
+                background: "transparent",
+                border: "none",
+                fontSize: "0.85rem",
+                fontFamily: "'Space Mono', monospace",
+              }}
+            >
+              ×
+            </button>
+          )}
+        </motion.div>
+      )}
 
       {/* Fake warning banner */}
       <div
@@ -186,7 +236,7 @@ export function LandingPage({ onStart, onHistory, historyCount }: LandingPagePro
         >
           A deeply scientific personality assessment based on absolutely nothing.
           <br />
-          <span style={{ color: "#B983FF" }}>10 questions.</span>{" "}
+          <span style={{ color: "#B983FF" }}>{questionCount || 30} questions.</span>{" "}
           <span style={{ color: "#FF6B6B" }}>Devastating accuracy.</span>{" "}
           <span style={{ color: "#6BCB77" }}>Zero chill.</span>
         </motion.p>

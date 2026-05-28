@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import type { QuizResult } from "../data/quizData";
 
 interface ShareCardProps {
@@ -6,6 +5,13 @@ interface ShareCardProps {
 }
 
 const STAT_EMOJIS: Record<string, string> = {
+  "Brain Rot Severity": "🧠",
+  "Touch Grass Requirement": "🌿",
+  "Main Character Syndrome": "🎭",
+  "Sleep Debt": "💤",
+  "Goblin Mode Risk": "👹",
+  "Emotional Wifi": "📶",
+  // legacy fallbacks
   "Brain Rot Level": "🧠",
   "Touch Grass Urgency": "🌿",
   "Main Character Energy": "🎭",
