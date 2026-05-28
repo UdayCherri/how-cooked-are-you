@@ -1,0 +1,18 @@
+export const WARNINGS_POOL: string[] = [
+  "May spontaneously begin a new side project mid-conversation.",
+  "Prolonged exposure to your group chat may cause secondhand brain rot.",
+  "Has been known to romanticize the act of leaving the house without actually doing it.",
+  "Will form a strong emotional bond with any character given more than 4 minutes of screen time.",
+  "Should not be trusted with the aux cord after 11pm.",
+  "Has not seen direct sunlight in a quantity that would alarm a botanist.",
+  "May draft and delete the same message up to 14 times before sending or quitting.",
+  "Operates one (1) personality on weekdays and a slightly chaotic mirror version on weekends.",
+  "Caution: contains opinions about media they have only seen edits of.",
+  "May respond to 'how are you' with a 6-paragraph analysis if conditions allow.",
+  "Likely to confuse 'rest' with 'horizontal scrolling'.",
+  "Tends to confuse self-awareness with personal growth. They are not the same.",
+  "Will start cleaning the entire apartment to avoid one (1) email.",
+  "Has muted the same person four times and unmuted them three.",
+  "Considers 'doomscrolling' a form of news literacy.",
+  "May enter goblin mode without warning. Goblin mode duration: unspecified.",
+];
