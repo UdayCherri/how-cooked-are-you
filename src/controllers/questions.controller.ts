@@ -5,6 +5,7 @@ export function listQuestions(_req: Request, res: Response) {
   const sanitized = QUESTIONS.map((q) => ({
     id: q.id,
     prompt: q.prompt,
+    machineNote: q.machineNote,
     choices: q.choices.map((c) => ({ id: c.id, label: c.label })),
   }));
   res.json({ count: sanitized.length, questions: sanitized });

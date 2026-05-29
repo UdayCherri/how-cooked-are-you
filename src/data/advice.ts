@@ -1,25 +1,28 @@
-export const RECOVERY_PLAN_POOL: string[] = [
-  "Touch a single (1) blade of grass. You do not need to enjoy it.",
-  "Drink a glass of water. Not energy drink. Water. The wet kind.",
-  "Close 40 tabs. Pick any 40. Do not read them first.",
-  "Eat a meal that involves a plate. Standing up does not count.",
-  "Go to bed at a number that starts with 10 or 11, not 2 or 3.",
-  "Mute one (1) group chat for 24 hours and observe what survives.",
-  "Reply to a single text you've been emotionally hostage to.",
-  "Take a walk outside without headphones. Survive it.",
-  "Stretch for 4 minutes. The bare minimum. You can do 4 minutes.",
-  "Cook one (1) actual meal with more than two ingredients.",
-  "Sit in a chair, alone, with no phone, for 10 minutes. Do not perish.",
-  "Open your fridge. Throw out the items that have evolved.",
-  "Look at the sky for 30 seconds. Confirm it is still there.",
-  "Wash the mug. You know which mug.",
-  "Block one (1) account that exclusively makes you feel worse.",
-  "Listen to a full album. From start to finish. Yes, that still exists.",
-  "Schedule one (1) thing that is not a doctor's appointment.",
-  "Re-read a book chapter you actually liked instead of starting a new one.",
-  "Open a window. Briefly. The outside world is still operational.",
-  "Make your bed. It will not fix you, but it is a small win.",
-];
+import type { Stat } from "../types/domain";
+
+// Human-readable labels for the 8 hidden stats.
+export const STAT_DISPLAY: Record<Stat, string> = {
+  cooked: "Cooked Level",
+  chaos: "Chaos",
+  delusion: "Delusion",
+  goblinEnergy: "Goblin Energy",
+  mainCharacterSyndrome: "Main Character Syndrome",
+  emotionalStability: "Emotional Stability",
+  touchGrassDebt: "Touch Grass Debt",
+  productivityIllusion: "Productivity Illusion",
+};
+
+// Short labels for compact contexts (event log effect strings, battle deltas).
+export const STAT_SHORT: Record<Stat, string> = {
+  cooked: "Cooked",
+  chaos: "Chaos",
+  delusion: "Delusion",
+  goblinEnergy: "Goblin",
+  mainCharacterSyndrome: "MCS",
+  emotionalStability: "Stability",
+  touchGrassDebt: "Grass Debt",
+  productivityIllusion: "Fake Productivity",
+};
 
 export const ADJECTIVES: string[] = [
   "concerning",
@@ -36,6 +39,12 @@ export const ADJECTIVES: string[] = [
   "weapons-grade",
   "softly apocalyptic",
   "richly fermented",
+  "industrial-strength",
+  "artisanal",
+  "clinically fascinating",
+  "aggressively casual",
+  "unsupervised",
+  "spiritually offline",
 ];
 
 export const NOUNS: string[] = [
@@ -53,25 +62,22 @@ export const NOUNS: string[] = [
   "internet damage",
   "feral confidence",
   "vibe debt",
+  "chaos surplus",
+  "productivity cosplay",
+  "sleep bankruptcy",
+  "parasocial firmware",
+  "side-quest addiction",
+  "untreated main-character-itis",
 ];
 
-export const STAT_DISPLAY: Record<string, string> = {
-  cookedPercentage: "Cooked Percentage",
-  delusionIndex: "Delusion Index",
-  brainRotSeverity: "Brain Rot Severity",
-  npcEnergy: "NPC Energy",
-  mainCharacterSyndrome: "Main Character Syndrome",
-  sleepDebt: "Sleep Debt",
-  goblinModeRisk: "Goblin Mode Risk",
-  touchGrassRequirement: "Touch Grass Requirement",
-  emotionalWifiStrength: "Emotional Wifi Strength",
-};
-
+// {{slots}}: adj, noun, statName, statValue, cookedPct, archetype, boss
 export const SUMMARY_TEMPLATES: string[] = [
-  "Your brain has achieved {{adj}} levels of {{noun}}. The {{statName}} reading alone ({{statValue}}) would alarm any licensed professional, which is exactly why you haven't seen one. You are {{cookedPct}}% cooked and somehow still online.",
-  "Diagnosis: {{archetype}}, advanced stage. Symptoms include {{adj}} {{noun}} and a {{statValue}} on the {{statName}} scale. You are functioning. Barely. Beautifully. Concerningly.",
-  "You present with classic {{adj}} {{noun}} and a textbook {{archetype}} aura. Friends describe you as 'fine, I think?'. The lab results disagree. Cooked level: {{cookedPct}}%.",
-  "Reading the data is like reading a poem written by someone who hasn't slept. Your {{statName}} is sitting at {{statValue}} and your {{noun}} is on the move. Estimated cookedness: {{cookedPct}}%.",
-  "You are operating on {{adj}} {{noun}} and the structural integrity of a single playlist. The {{archetype}} archetype is louder than usual today. {{cookedPct}}% cooked. The vibes are present.",
-  "Your scan returned {{adj}} {{noun}}, a {{statName}} of {{statValue}}, and the faint smell of an unplugged router. You are a {{archetype}}, and frankly, it's working for you, sort of.",
+  "The machine has reached a verdict. You present with {{adj}} levels of {{noun}}, a {{statName}} reading of {{statValue}}, and the unmistakable aura of a {{archetype}}. Final cooked level: {{cookedPct}}%. {{boss}} could not fully explain you either.",
+  "Diagnosis complete: {{archetype}}, late stage. Your {{statName}} is sitting at {{statValue}} and your {{noun}} is, frankly, {{adj}}. You survived an encounter with {{boss}} and emerged {{cookedPct}}% cooked. We are not mad. We are fascinated.",
+  "After {{adj}} deliberation, the diagnostic machine classifies you as a {{archetype}} running on pure {{noun}}. {{statName}}: {{statValue}}. Cooked level: {{cookedPct}}%. {{boss}} has logged you as 'a situation'.",
+  "Scan returned {{adj}} {{noun}}, a {{statName}} of {{statValue}}, and the faint smell of an unplugged router. You are a {{archetype}}. {{boss}} tried to intervene and failed. You are {{cookedPct}}% cooked and weirdly thriving.",
+  "Your readings are like a poem written by someone who hasn't slept since the second Obama term. {{statName}} at {{statValue}}, {{noun}} {{adj}} and rising, {{archetype}} energy off the charts. {{boss}} blinked first. Cooked level: {{cookedPct}}%.",
+  "The machine wishes to note, for the record, that it has seen a lot, and you are still {{adj}}. {{archetype}} confirmed. {{statName}}: {{statValue}}. {{noun}}: present and accounted for. {{cookedPct}}% cooked. {{boss}} sends its regards.",
+  "Preliminary findings: {{adj}} {{noun}}, structurally significant {{statName}} ({{statValue}}), and a {{archetype}} silhouette visible from orbit. You faced {{boss}} and did not improve. Cooked level holds at {{cookedPct}}%.",
+  "You are operating on {{noun}} and the structural integrity of a single playlist. The {{archetype}} archetype is louder than usual today, your {{statName}} reads {{statValue}}, and {{boss}} has stopped asking questions. {{cookedPct}}% cooked. The vibes are present.",
 ];

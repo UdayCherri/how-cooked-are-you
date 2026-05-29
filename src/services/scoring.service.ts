@@ -1,18 +1,15 @@
 import { QUESTIONS, QUESTIONS_BY_ID } from "../data/questions";
 import type { Answer, Stat, StatBlock } from "../types/domain";
 import { STATS } from "../types/domain";
-import { mulberry32, type Rng } from "../lib/rng";
-import { seedFromAnswers } from "../utils/seed";
-import { clamp, topKey } from "../utils/pick";
-import { resolveArchetype } from "../data/archetypes";
+import type { Rng } from "../lib/rng";
+import { clamp } from "../utils/pick";
 
-const INPUT_STATS: Stat[] = STATS.filter((s) => s !== "cookedPercentage") as Stat[];
-
+// All 8 stats are accumulated from answer weights.
 const MAX_RAW: Record<Stat, number> = (() => {
   const out = {} as Record<Stat, number>;
   for (const s of STATS) out[s] = 0;
   for (const q of QUESTIONS) {
-    for (const stat of INPUT_STATS) {
+    for (const stat of STATS) {
       let maxForQ = 0;
       for (const c of q.choices) {
         const v = c.weights[stat] ?? 0;
@@ -21,77 +18,89 @@ const MAX_RAW: Record<Stat, number> = (() => {
       out[stat] += maxForQ;
     }
   }
-  out.cookedPercentage = 100;
+  // Guard against divide-by-zero for any stat with no positive weight anywhere.
+  for (const s of STATS) if (out[s] <= 0) out[s] = 100;
   return out;
 })();
 
+// How much each stat contributes to the headline cooked percentage.
+// `cooked` dominates; `emotionalStability` is inverse (more stable = less cooked).
 const COOKED_WEIGHTS: Record<Stat, number> = {
-  cookedPercentage: 0,
-  delusionIndex: 1.2,
-  brainRotSeverity: 1.5,
-  npcEnergy: 0.6,
-  mainCharacterSyndrome: 1.0,
-  sleepDebt: 1.1,
-  goblinModeRisk: 1.2,
-  touchGrassRequirement: 1.3,
-  emotionalWifiStrength: -1.6,
+  cooked: 1.6,
+  chaos: 1.0,
+  delusion: 1.1,
+  goblinEnergy: 0.9,
+  mainCharacterSyndrome: 0.8,
+  emotionalStability: -1.4,
+  touchGrassDebt: 1.0,
+  productivityIllusion: 0.7,
 };
 
 const EMOJI_REGEX = /\p{Extended_Pictographic}/gu;
 
+// The yap box feeds the machine extra ammunition. Longer / louder / more
+// punctuated yaps raise chaos, delusion, and main-character readings.
 function yapBoost(yap: string | undefined): Partial<Record<Stat, number>> {
   if (!yap) return {};
   const text = yap.trim();
   if (!text) return {};
   const len = Math.min(text.length, 2000);
   const lettersOnly = text.replace(/[^A-Za-z]/g, "");
-  const capsRatio = lettersOnly.length > 0
-    ? (text.match(/[A-Z]/g)?.length ?? 0) / lettersOnly.length
-    : 0;
+  const capsRatio =
+    lettersOnly.length > 0 ? (text.match(/[A-Z]/g)?.length ?? 0) / lettersOnly.length : 0;
   const emojiCount = (text.match(EMOJI_REGEX) ?? []).length;
   const punctRuns = (text.match(/[!?]{2,}|\.{3,}/g) ?? []).length;
 
   return {
-    brainRotSeverity: Math.round(len / 40 + emojiCount * 4 + punctRuns * 3),
-    delusionIndex: Math.round(len / 60 + capsRatio * 30 + punctRuns * 2),
+    chaos: Math.round(len / 40 + emojiCount * 4 + punctRuns * 3),
+    delusion: Math.round(len / 60 + capsRatio * 30 + punctRuns * 2),
     mainCharacterSyndrome: Math.round(capsRatio * 25 + len / 120),
+    cooked: Math.round(len / 80 + emojiCount * 2),
   };
 }
 
-export type ScoringOutput = {
+export function emptyStats(): StatBlock {
+  const out = {} as StatBlock;
+  for (const s of STATS) out[s] = 0;
+  return out;
+}
+
+// Recompute the headline cooked percentage from the (post-events, post-boss)
+// stat block.
+export function computeCookedPercentage(stats: StatBlock): number {
+  let weighted = 0;
+  let weightSum = 0;
+  for (const s of STATS) {
+    const w = COOKED_WEIGHTS[s];
+    const contribution = w >= 0 ? stats[s] * w : (100 - stats[s]) * Math.abs(w);
+    weighted += contribution;
+    weightSum += Math.abs(w);
+  }
+  return clamp(Math.round(weighted / weightSum));
+}
+
+export type ScoreOutput = {
   stats: StatBlock;
-  archetypeTitle: string;
-  archetypeTag: string;
-  archetypeTagline: string;
-  archetypeFlavor: string;
-  archetypeBestMatch: string;
-  archetypeWorstMatch: string;
-  rng: Rng;
+  tagTally: Record<string, number>;
 };
 
-export type ScoringInput = {
+// Produces the base 8-stat block (0–100) plus an archetype-tag tally from the
+// answers. Events/boss/cookedPercentage are applied later by the engine.
+export function scoreBase(args: {
   answers: Answer[];
   yap?: string;
-  randomMode?: boolean;
-};
-
-export function score({ answers, yap, randomMode }: ScoringInput): ScoringOutput {
-  const seed = randomMode
-    ? (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0
-    : seedFromAnswers(answers, yap);
-  const rng = mulberry32(seed);
-
-  const raw = {} as Record<Stat, number>;
-  for (const s of STATS) raw[s] = 0;
+  randomMode: boolean;
+  rng: Rng;
+}): ScoreOutput {
+  const { answers, yap, randomMode, rng } = args;
+  const raw = emptyStats();
   const tagTally: Record<string, number> = {};
 
   if (randomMode) {
-    for (const stat of INPUT_STATS) {
-      raw[stat] = Math.floor(rng.next() * MAX_RAW[stat]);
-    }
+    for (const stat of STATS) raw[stat] = Math.floor(rng.next() * MAX_RAW[stat]);
     for (const c of QUESTIONS.flatMap((q) => q.choices)) {
       for (const tag of c.archetypeTags ?? []) {
-        tagTally[tag] = (tagTally[tag] ?? 0) + (rng.next() < 0.15 ? 1 : 0);
+        tagTally[tag] = (tagTally[tag] ?? 0) + (rng.next() < 0.18 ? 1 : 0);
       }
     }
   } else {
@@ -113,34 +122,10 @@ export function score({ answers, yap, randomMode }: ScoringInput): ScoringOutput
     }
   }
 
-  const stats = {} as StatBlock;
-  for (const s of STATS) stats[s] = 0;
-  for (const s of INPUT_STATS) {
-    const max = MAX_RAW[s] || 1;
-    stats[s] = clamp(Math.round((raw[s] / max) * 100));
+  const stats = emptyStats();
+  for (const s of STATS) {
+    stats[s] = clamp(Math.round((raw[s] / MAX_RAW[s]) * 100));
   }
 
-  let weighted = 0;
-  let weightSum = 0;
-  for (const s of INPUT_STATS) {
-    const w = COOKED_WEIGHTS[s];
-    const contribution = w >= 0 ? stats[s] * w : (100 - stats[s]) * Math.abs(w);
-    weighted += contribution;
-    weightSum += Math.abs(w);
-  }
-  stats.cookedPercentage = clamp(Math.round(weighted / weightSum));
-
-  const topTag = topKey(tagTally);
-  const archetype = resolveArchetype(topTag);
-
-  return {
-    stats,
-    archetypeTitle: archetype.title,
-    archetypeTag: archetype.tag,
-    archetypeTagline: archetype.tagline,
-    archetypeFlavor: archetype.flavor,
-    archetypeBestMatch: archetype.bestMatchTag,
-    archetypeWorstMatch: archetype.worstMatchTag,
-    rng,
-  };
+  return { stats, tagTally };
 }

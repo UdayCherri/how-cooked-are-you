@@ -5,9 +5,11 @@ import type { Answer, AnalyzeResult, Diagnostic, StatBlock } from "../types/doma
 
 export type PersistInput = {
   stats: StatBlock;
+  cookedPercentage: number;
   archetypeTitle: string;
   diagnostic: Diagnostic;
   answers: Answer[];
+  seed: number;
   yap?: string;
 };
 
@@ -16,11 +18,12 @@ export async function persistResult(input: PersistInput): Promise<AnalyzeResult>
   const row = await prisma.result.create({
     data: {
       id,
-      cookedPct: input.stats.cookedPercentage,
+      cookedPct: input.cookedPercentage,
       archetype: input.archetypeTitle,
       stats: JSON.stringify(input.stats),
       diagnostic: JSON.stringify(input.diagnostic),
       answers: JSON.stringify(input.answers),
+      seed: input.seed,
       yap: input.yap ?? null,
     },
   });
@@ -31,6 +34,7 @@ export async function persistResult(input: PersistInput): Promise<AnalyzeResult>
     archetype: row.archetype,
     stats: input.stats,
     diagnostic: input.diagnostic,
+    seed: row.seed ?? input.seed,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -52,6 +56,7 @@ export async function getResultById(id: string): Promise<AnalyzeResult | null> {
     archetype: row.archetype,
     stats,
     diagnostic,
+    seed: row.seed ?? 0,
     createdAt: row.createdAt.toISOString(),
   };
 }

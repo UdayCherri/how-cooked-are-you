@@ -2,135 +2,139 @@
 
 > You are cooked. We can tell you exactly how cooked.
 
-A chaotic internet personality diagnostic — Buzzfeed quiz meets Gen-Z internet chaos. Users answer 30 absurd multiple-choice questions and receive a fully-rendered, comedic, shareable diagnostic with a Cooked Percentage, an archetype (Discord Warlock, Microwave Philosopher, Sleep-Deprived Oracle, etc.), and a chaotic recovery plan.
+A replayable, browser-based comedy game disguised as a diagnostic machine. A
+suspicious machine interrogates you with **8 absurd questions**, interrupts
+itself with **random events**, throws **a boss encounter**, secretly tracks **8
+hidden stats**, unlocks **achievements**, and assembles a procedurally generated
+diagnostic report from large content pools — so two players rarely get the same
+result. Then it lets two reports **battle**.
 
-Full-stack TypeScript app in one repo:
+This is not a personality quiz. It's a small indie game with a verdict at the end.
 
-- **Backend:** Node 20 + Express 4 + Prisma 5 + SQLite + Zod
-- **Frontend:** React 18 + Vite 6 + Tailwind 4 + Motion (Framer)
-- **Deterministic engine:** identical inputs produce identical results, so share links always re-render the same diagnostic.
-- **No LLM, no auth, no tracking, no nonsense.**
+- **Stack:** Node 20 + Express 4 + Prisma 5 + SQLite + Zod. TypeScript, strict.
+- **Deterministic engine:** the whole pipeline is a pure function of a seed, so a
+  saved report always regenerates identically — while fresh runs stay varied.
+- **No LLM, no auth, no tracking.** All comedy is template-driven via a seeded PRNG.
 
-## Quickstart
+> **Frontend note:** the React app under `web/` targets the *previous*
+> 33-question / 9-metric API and is **currently out of sync** with this rebuilt
+> game backend. The deliverable here is the backend; wiring the frontend to the
+> new game loop (events / bosses / achievements / battle) is a future pass.
+
+## Quickstart (backend / API)
 
 ```bash
 npm install
-npm --prefix web install
-npm run db:migrate
-npm run dev
+npm run db:migrate     # apply Prisma migrations
+npm run db:seed        # optional: a few sample reports
+npm run dev:api        # API on http://localhost:3000
 ```
 
-Then open **http://localhost:5173**. Vite dev server proxies `/api/*` to the Express backend at `:3000`.
+Hit `http://localhost:3000/api/health` to confirm it's alive. With no `web/dist`
+build present, `GET /` returns a JSON service pointer listing the routes.
 
 ## Project layout
 
 ```
 .
 ├── prisma/                  # schema + migrations + dev.db
-├── src/                     # Express backend
-│   ├── controllers/         # route handlers
-│   ├── data/                # questions, archetypes, comedy pools
-│   ├── lib/                 # env, prisma, rng
-│   ├── middleware/          # errors, validation, rate limit
-│   ├── routes/              # /api/* router
-│   ├── services/            # scoring, diagnostic, persistence
-│   ├── types/, utils/       # shared types & helpers
-│   ├── app.ts               # express app (also serves web/dist in prod)
-│   └── server.ts            # entrypoint
-└── web/                     # React + Vite frontend
-    ├── src/app/
-    │   ├── components/      # screens + ShareCard + FloatingStickers
-    │   ├── data/quizData.ts # types + API → UI adapter
-    │   └── lib/             # api client + archetype display metadata
-    ├── index.html
-    ├── vite.config.ts       # dev proxy /api → http://localhost:3000
-    └── tsconfig.json
+└── src/                     # Express backend
+    ├── controllers/         # thin HTTP handlers (incl. battle)
+    ├── data/                # all content pools (see below)
+    ├── lib/                 # env, prisma, rng (mulberry32)
+    ├── middleware/          # errors, validation, rate limit
+    ├── routes/              # /api/* router
+    ├── services/            # engine, scoring, events, boss, achievements,
+    │                        #   diagnostic (report), battle, persistence
+    ├── types/, utils/       # shared types, seed + pick helpers
+    ├── app.ts               # express app (also serves web/dist if built)
+    └── server.ts            # entrypoint
 ```
+
+### Content pools (`src/data/`)
+
+| File | Contents |
+|---|---|
+| `questions.ts` | 8 primary questions, 4 choices each (stat weights + archetype tags) |
+| `archetypes.ts` | 50+ archetypes with stat affinity + best/worst matches |
+| `events.ts` | 30+ random event cards (3–5 fire per run) |
+| `bosses.ts` | 20 bosses (1 per run) |
+| `achievements.ts` | 50+ achievements with predicate tests |
+| `evidence.ts` | 100+ "evidence" statements |
+| `diagnoses.ts` | 50+ fake diagnoses |
+| `cautions.ts` | 25+ caution alerts |
+| `warnings.ts` / `observations.ts` / `recommendations.ts` | 50+ each |
+| `advice.ts` | stat labels, adjectives, nouns, summary templates |
+| `battle.ts` | battle-mode humor pools |
+
+## The diagnostic pipeline
+
+Orchestrated by `src/services/engine.service.ts`, a pure function of the seed:
+
+1. **Score** — answer weights (+ a yap-text boost) produce the base 8-stat block.
+2. **Events** — 3–5 random event cards fire and shift the stats.
+3. **Boss** — one boss imposes a final stat skew.
+4. **Cooked %** — the headline number is a weighted blend of the finished block.
+5. **Archetype** — chosen by blending stat affinity with answer-derived tags.
+6. **Achievements** — every predicate is evaluated against the finished run.
+7. **Report** — title, summary, fake diagnosis, evidence, warnings, cautions,
+   observations, recommendations, compatibility, event log, boss, achievements.
+
+### Hidden stats (0–100)
+
+`cooked`, `chaos`, `delusion`, `goblinEnergy`, `mainCharacterSyndrome`,
+`emotionalStability` (inverse — higher = less cooked), `touchGrassDebt`,
+`productivityIllusion`. Players never see raw values; they drive generation.
+
+## API reference
+
+JSON in / JSON out. Errors: `{ error: { code, message } }`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/health` | liveness probe |
+| `GET` | `/api/questions` | 8 questions, choices sanitized (weights/tags stripped) |
+| `POST` | `/api/analyze` | body: `{ answers: [{qid, choiceId}], yap?, seed? }` → full report |
+| `GET` | `/api/result/:id` | re-fetch a persisted report (byte-identical) |
+| `GET` | `/api/history?limit=20` | newest results, max 50 |
+| `POST` | `/api/battle` | body: `{ a: id, b: id }` → winner/loser, stat comparison, verdict |
+
+- Empty `answers` (or `?random=1`) triggers **random mode** — fully randomized
+  stats for a chaotic fallback run.
+- Passing an explicit `seed` makes a run fully reproducible (used for tests).
+- Rate limits: `POST /api/analyze` and `POST /api/battle` → 10/min/IP; others → 60/min/IP.
+
+See `sample-responses.md` for real captured outputs.
+
+## Determinism & replayability
+
+The entire pipeline is seeded by `mulberry32`. By default the seed is derived
+from the answers (FNV-1a) XORed with a per-run nonce, so **resubmitting the same
+answers still feels different** — but the resolved seed is persisted alongside
+the rendered report, so **`GET /api/result/:id` always returns the same report**.
+Pass an explicit `seed` to force exact reproduction.
 
 ## Scripts (run from repo root)
 
 | Script | What |
 |---|---|
-| `npm run dev` | Runs API (`:3000`) + Vite (`:5173`) concurrently with proxy. **Use this for local dev.** |
-| `npm run dev:api` | Backend only — hot-reload via tsx watch |
-| `npm run dev:web` | Frontend only — Vite dev server |
-| `npm run build` | Builds the web bundle into `web/dist/`, then compiles the backend to `dist/` |
-| `npm start` | Boots the compiled server. Serves API + `web/dist` static + SPA fallback at port `PORT` (default 3000) |
-| `npm run typecheck` | `tsc --noEmit` for both backend and frontend |
+| `npm run dev:api` | Backend only, hot-reload via tsx watch |
 | `npm run db:migrate` | Apply Prisma migrations (dev) |
 | `npm run db:deploy` | Apply migrations (production) |
-| `npm run db:seed` | Seed a few sample results |
+| `npm run db:seed` | Seed a few sample reports |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run build` | Compiles the backend to `dist/` (also builds `web/` if present) |
+| `npm start` | Boots the compiled server at `PORT` (default 3000) |
 
-## How the app works
+## Deploy (API)
 
-1. **Boot** — frontend fetches `GET /api/questions`. If the URL is `/r/<id>`, it also fetches that shared result and jumps straight to the dashboard.
-2. **Quiz** — `QuizFlow` renders one question at a time; each answer is `{qid, choiceId}`.
-3. **Submit** — answers go to `POST /api/analyze` in parallel with a ~3.2s themed loading animation.
-4. **Results** — backend returns `{ id, cookedPercentage, archetype, stats, diagnostic }`. The dashboard runs an animated score reveal, meme-stat cards, recovery plan, observations, compatibility analysis, and a screenshottable share card.
-5. **Share** — copying the share link copies `https://yourhost/r/<id>`. Opening that URL on any device re-renders the same diagnostic from the DB.
-6. **History** — local results are stored in `localStorage` and listed under "📋 History".
+Works on Render / Railway / Fly / any Node host:
 
-## API reference
-
-All routes are JSON in / JSON out. Errors come back as `{ error: { code, message } }`.
-
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/api/health` | liveness probe |
-| `GET` | `/api/questions` | full quiz (weights stripped) |
-| `POST` | `/api/analyze` | body: `{ answers: [{qid, choiceId}], yap?: string }` |
-| `GET` | `/api/result/:id` | re-fetch a persisted diagnostic |
-| `GET` | `/api/history?limit=20` | newest results, max 50, default 20 |
-
-Rate limits: `POST /api/analyze` → 10 req/min/IP. Everything else → 60 req/min/IP.
-
-See `sample-responses.md` for real captured outputs.
-
-## Generated metrics (0–100)
-
-- `cookedPercentage` (headline number — weighted average)
-- `delusionIndex`, `brainRotSeverity`, `npcEnergy`, `mainCharacterSyndrome`, `sleepDebt`, `goblinModeRisk`, `touchGrassRequirement`
-- `emotionalWifiStrength` (inverted — higher = healthier)
-
-## Archetypes
-
-Ten titles + a "Quietly Cooked Civilian" fallback. Examples: Microwave Philosopher, Discord Warlock, Certified Yapper, Sleep-Deprived Oracle, Chronically Online Goblin, Chaotic Neutral Coder, Emotionally Buffering, Feral Twitter Scholar, Lo-fi Doomscroller, Ambient Crashout Survivor.
-
-Each archetype carries a tagline, comedic flavor text, and best/worst compatibility links.
-
-## Determinism
-
-Same answers + same yap → same diagnostic, byte-for-byte. Seeded `mulberry32` PRNG drives every random-looking decision (which template, which warning, which observation, which compatibility number). Share a result and your friends will see exactly what you saw — modulo a new persisted id.
-
-## Deploy
-
-### Render
-
-1. New Web Service from this repo.
-2. **Build command:** `npm install && npm --prefix web install && npm run build && npm run db:deploy`
-3. **Start command:** `npm start`
-4. **Env vars:**
-   - `DATABASE_URL` — e.g. `file:/var/data/prod.db` (attach a Render Disk for persistence)
-   - `NODE_ENV=production`
-   - `CORS_ORIGIN=*` (or your specific origin)
-   - `PORT` is set by Render automatically.
-
-### Railway
-
-1. Deploy from repo → set service variables.
-2. **Build:** `npm install && npm --prefix web install && npm run build && npm run db:deploy`
-3. **Start:** `npm start`
-4. Mount a volume and set `DATABASE_URL=file:/data/prod.db` for persistence.
-
-### Fly.io / generic Node
-
-Same build + start. Make sure the SQLite file lives on a persisted volume. `trust proxy` is already enabled, so rate-limiting honors `X-Forwarded-For`.
-
-## Notes
-
-- The frontend's screen-level components are all custom Figma-Make designs (`LandingPage`, `QuizFlow`, `LoadingScreen`, `ResultsDashboard`, `HistoryScreen`, `ShareCard`, `FloatingStickers`). The Figma-shipped shadcn UI kit was removed because none of the screens used it.
-- All comedy is template-driven via a seeded PRNG — no LLM calls, no API costs, sub-50ms responses.
-- The backend exposes only sanitized question/choice text — answer weights and archetype tags never leak to the client.
+- **Build:** `npm install && npm run build && npm run db:deploy`
+- **Start:** `npm start`
+- **Env:** `DATABASE_URL` (e.g. `file:/data/prod.db` on a persisted volume),
+  `NODE_ENV=production`, `CORS_ORIGIN`. `PORT` is provided by the platform.
+- `trust proxy` is enabled, so rate-limiting honors `X-Forwarded-For`.
 
 ## License
 
