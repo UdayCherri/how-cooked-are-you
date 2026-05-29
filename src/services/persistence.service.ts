@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { prisma } from "../lib/prisma";
+import { HttpError } from "../middleware/errorHandler";
 import type { Answer, AnalyzeResult, Diagnostic, StatBlock } from "../types/domain";
 
 export type PersistInput = {
@@ -37,12 +38,20 @@ export async function persistResult(input: PersistInput): Promise<AnalyzeResult>
 export async function getResultById(id: string): Promise<AnalyzeResult | null> {
   const row = await prisma.result.findUnique({ where: { id } });
   if (!row) return null;
+  let stats: StatBlock;
+  let diagnostic: Diagnostic;
+  try {
+    stats = JSON.parse(row.stats) as StatBlock;
+    diagnostic = JSON.parse(row.diagnostic) as Diagnostic;
+  } catch {
+    throw new HttpError(500, "corrupt_result", "persisted result could not be parsed");
+  }
   return {
     id: row.id,
     cookedPercentage: row.cookedPct,
     archetype: row.archetype,
-    stats: JSON.parse(row.stats) as StatBlock,
-    diagnostic: JSON.parse(row.diagnostic) as Diagnostic,
+    stats,
+    diagnostic,
     createdAt: row.createdAt.toISOString(),
   };
 }

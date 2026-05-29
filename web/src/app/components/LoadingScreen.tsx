@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface LoadingScreenProps {
   onComplete: () => void;
@@ -30,6 +30,7 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [warningIndex, setWarningIndex] = useState(0);
+  const firedRef = useRef(false);
 
   const totalDuration = 3200;
   const messageInterval = totalDuration / LOADING_MESSAGES.length;
@@ -43,7 +44,10 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
       setProgress(pct);
       if (pct >= 100) {
         clearInterval(progressTimer);
-        setTimeout(onComplete, 300);
+        if (!firedRef.current) {
+          firedRef.current = true;
+          setTimeout(onComplete, 300);
+        }
       }
     }, 30);
 
