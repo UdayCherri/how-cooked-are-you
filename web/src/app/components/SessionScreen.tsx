@@ -70,7 +70,7 @@ export function SessionScreen({ onComplete }: SessionScreenProps) {
   const [schedule] = useState<ScheduleItem[]>(() => buildSchedule());
   const [stepIndex, setStepIndex] = useState(0);
   const [phase, setPhase] = useState<SessionPhase>("question_show");
-  const [questionAnswers, setQuestionAnswers] = useState<Record<number, number>>({});
+  const [, setQuestionAnswers] = useState<Record<number, number>>({});
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
   const [machineText, setMachineText] = useState("DIAGNOSTIC INITIATED.\nANSWER HONESTLY.\n(The machine always knows.)");
   const [expression, setExpression] = useState<Expression>("neutral");
@@ -78,7 +78,7 @@ export function SessionScreen({ onComplete }: SessionScreenProps) {
   const [bossChoiceIdx, setBossChoiceIdx] = useState<number | null>(null);
   const [chosenAnswerIdx, setChosenAnswerIdx] = useState<number | null>(null);
   const [newEvidenceFlash, setNewEvidenceFlash] = useState(false);
-  const [bossEventId, setBossEventId] = useState<string | null>(null);
+  const [, setBossEventId] = useState<string | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs so timeout callbacks always see current values (avoids stale closure bugs)

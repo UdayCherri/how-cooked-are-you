@@ -943,4 +943,6 @@ export interface GameResult {
   questionAnswers: Record<number, number>;
   bossChoiceIdx: number;
   bossEventId: string | null;
+  /** True when reconstructed from the backend (shared link / history) without a live session. */
+  shared?: boolean;
 }

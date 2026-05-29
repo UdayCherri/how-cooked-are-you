@@ -1,18 +1,14 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
-import {
-  BOSS_STAGES,
-  getBossTier,
-  type Achievement,
-  type EvidenceItem,
-  type GameResult,
-} from "../data/gameData";
+import { BOSS_STAGES, getBossTier, type GameResult } from "../data/gameData";
 import { MachineFace } from "./MachineFace";
+import { shareUrlFor } from "../lib/adapt";
 
 interface ResultsScreenProps {
   result: GameResult;
   onRetry: () => void;
   onHistory: () => void;
+  onBattle: () => void;
 }
 
 const EVIDENCE_STYLES: Record<string, { color: string; label: string }> = {
@@ -41,7 +37,7 @@ function useCountUp(target: number, delay = 400, duration = 1600) {
   return current;
 }
 
-export function ResultsScreen({ result, onRetry, onHistory }: ResultsScreenProps) {
+export function ResultsScreen({ result, onRetry, onHistory, onBattle }: ResultsScreenProps) {
   const { score, archetype, evidence, achievements } = result;
   const [revealPhase, setRevealPhase] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -62,17 +58,22 @@ export function ResultsScreen({ result, onRetry, onHistory }: ResultsScreenProps
   }, []);
 
   const handleShare = async () => {
-    const text = `I just got diagnosed by The Machine.\n\n${archetype.emoji} ${archetype.name} (${score}/100)\n\n"${archetype.verdict.slice(0, 100)}..."\n\nHOW COOKED ARE YOU? → howcookedareyou.app`;
+    const url = shareUrlFor(result.id);
+    const text = `I just got diagnosed by The Machine.\n\n${archetype.emoji} ${archetype.name} (${score}/100)\n\n"${archetype.verdict.slice(0, 100)}..."\n\nHOW COOKED ARE YOU? → ${url}`;
     try {
       if (navigator.share) {
-        await navigator.share({ text });
-      } else {
-        await navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
+        await navigator.share({ title: "How Cooked Are You?", text, url });
+        return;
       }
     } catch {
-      try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* ignore */ }
+      /* user cancelled native share */
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* clipboard blocked */
     }
   };
 
@@ -114,19 +115,36 @@ export function ResultsScreen({ result, onRetry, onHistory }: ResultsScreenProps
         >
           CASE_{result.id.slice(-6).toUpperCase()} · {result.date}
         </span>
-        <span
-          className="flex items-center gap-1.5 px-2.5 py-1"
-          style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: "0.52rem",
-            color: "#6BCB77",
-            background: "rgba(107,203,119,0.08)",
-            border: "1px solid rgba(107,203,119,0.2)",
-            letterSpacing: "0.1em",
-          }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-current" />
-          DIAGNOSTIC CLOSED
+        <span className="flex items-center gap-2">
+          {result.shared && (
+            <span
+              className="px-2.5 py-1"
+              style={{
+                fontFamily: "'Space Mono', monospace",
+                fontSize: "0.52rem",
+                color: "#B983FF",
+                background: "rgba(185,131,255,0.08)",
+                border: "1px solid rgba(185,131,255,0.25)",
+                letterSpacing: "0.1em",
+              }}
+            >
+              👁 SHARED FILE
+            </span>
+          )}
+          <span
+            className="flex items-center gap-1.5 px-2.5 py-1"
+            style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: "0.52rem",
+              color: "#6BCB77",
+              background: "rgba(107,203,119,0.08)",
+              border: "1px solid rgba(107,203,119,0.2)",
+              letterSpacing: "0.1em",
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            DIAGNOSTIC CLOSED
+          </span>
         </span>
       </div>
 
@@ -169,7 +187,7 @@ export function ResultsScreen({ result, onRetry, onHistory }: ResultsScreenProps
                 >
                   {archetype.verdict}
                 </p>
-                {bossChoice && (
+                {!result.shared && bossChoice && (
                   <p
                     className="mt-3"
                     style={{
@@ -522,6 +540,24 @@ export function ResultsScreen({ result, onRetry, onHistory }: ResultsScreenProps
                 }}
               >
                 {copied ? "✓ copied to clipboard" : "📤 SHARE DIAGNOSIS"}
+              </motion.button>
+
+              <motion.button
+                whileHover={{ x: 3 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onBattle}
+                className="w-full py-3.5 cursor-pointer"
+                style={{
+                  background: "#B983FF",
+                  border: "2px solid #B983FF",
+                  boxShadow: "4px 4px 0 0 #7B3FFF",
+                  fontFamily: "'Fredoka', sans-serif",
+                  fontSize: "1.05rem",
+                  fontWeight: 700,
+                  color: "#080808",
+                }}
+              >
+                ⚔ BATTLE A FRIEND
               </motion.button>
 
               <div className="flex gap-3">

@@ -121,6 +121,9 @@ export type Achievement = {
 // ── Generated report ───────────────────────────────────────────────────────
 export type Diagnostic = {
   title: string;
+  // The chosen archetype's emoji, persisted so shared results / battles can show
+  // it without re-deriving across all archetypes on the client.
+  archetypeEmoji: string;
   tagline: string;
   summary: string;
   fakeDiagnosis: string;

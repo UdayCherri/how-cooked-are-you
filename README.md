@@ -9,35 +9,60 @@ hidden stats**, unlocks **achievements**, and assembles a procedurally generated
 diagnostic report from large content pools — so two players rarely get the same
 result. Then it lets two reports **battle**.
 
-This is not a personality quiz. It's a small indie game with a verdict at the end.
+This is not a personality quiz. It's a small indie game with a verdict at the end —
+a full-stack experience: a React frontend that makes the machine *feel alive*
+sitting on top of the procedural game engine.
 
-- **Stack:** Node 20 + Express 4 + Prisma 5 + SQLite + Zod. TypeScript, strict.
+- **Stack:** Node 20 + Express 4 + Prisma 5 + SQLite + Zod backend; React 19 + Vite 6
+  + `motion` frontend. TypeScript, strict, end to end.
 - **Deterministic engine:** the whole pipeline is a pure function of a seed, so a
   saved report always regenerates identically — while fresh runs stay varied.
 - **No LLM, no auth, no tracking.** All comedy is template-driven via a seeded PRNG.
 
-> **Frontend note:** the React app under `web/` targets the *previous*
-> 33-question / 9-metric API and is **currently out of sync** with this rebuilt
-> game backend. The deliverable here is the backend; wiring the frontend to the
-> new game loop (events / bosses / achievements / battle) is a future pass.
-
-## Quickstart (backend / API)
+## Quickstart (full game)
 
 ```bash
 npm install
 npm run db:migrate     # apply Prisma migrations
-npm run db:seed        # optional: a few sample reports
-npm run dev:api        # API on http://localhost:3000
+npm run db:seed        # optional: a few sample reports to battle against
+npm run dev            # API on :3000, web (Vite) on :5173 with /api proxy
 ```
 
-Hit `http://localhost:3000/api/health` to confirm it's alive. With no `web/dist`
-build present, `GET /` returns a JSON service pointer listing the routes.
+Open **http://localhost:5173** and take the diagnostic. Or run just the API with
+`npm run dev:api` and hit `http://localhost:3000/api/health`. For a production-style
+run, `npm run build && npm start` serves the built frontend and the API together
+from `http://localhost:3000` (share links like `/r/:id` resolve via SPA fallback).
+
+## The experience
+
+The frontend is a cinematic "diagnostic machine" interrogation, wired to the backend
+in a **hybrid** model: the narrated session is curated client-side theater, but the
+final verdict is computed by the backend's procedural engine and persisted.
+
+- **A machine that's alive.** An ASCII-faced machine interrogates you with a typewriter
+  cadence and shifting expressions (suspicious, judging, glitching…), filling an
+  **evidence board** as you answer.
+- **Scripted chaos.** A random **scan anomaly** event fires mid-session and a tiered
+  **boss confrontation** demands you respond before the final question.
+- **Backend verdict.** On completion the answers are sent to `/api/analyze`; your
+  score, archetype, and achievements come from the real engine, then reveal in phases
+  (assessment → character sheet → evidence board → achievements → actions).
+- **Persisted & shareable.** Every run gets a real id — server history, a shareable
+  `/r/:id` link that re-opens the case file, and friend battles.
+- **Battle mode.** Pit your case file against a past result or a pasted share link; the
+  machine declares a winner with a deliberately unscientific verdict.
 
 ## Project layout
 
 ```
 .
 ├── prisma/                  # schema + migrations + dev.db
+├── web/                     # React 18 + Vite frontend (cinematic "machine")
+│   └── src/app/
+│       ├── components/      # Landing, Session, Results, History, Battle,
+│       │                    #   MachineFace, TypewriterText
+│       ├── lib/             # api client + backend↔view-model adapter
+│       └── data/            # gameData (questions, events, bosses, archetypes)
 └── src/                     # Express backend
     ├── controllers/         # thin HTTP handlers (incl. battle)
     ├── data/                # all content pools (see below)

@@ -28,8 +28,8 @@ type StatComparison = {
 };
 
 export type BattleResult = {
-  a: { id: string; archetype: string; cookedPercentage: number; power: number };
-  b: { id: string; archetype: string; cookedPercentage: number; power: number };
+  a: { id: string; archetype: string; emoji: string; cookedPercentage: number; power: number };
+  b: { id: string; archetype: string; emoji: string; cookedPercentage: number; power: number };
   tie: boolean;
   winnerId: string | null;
   loserId: string | null;
@@ -130,8 +130,8 @@ export async function battle(aId: string, bId: string): Promise<BattleResult> {
     : fillBattle(rng.pick(BATTLE_SUMMARIES), ctx);
 
   return {
-    a: { id: ra.id, archetype: ra.archetype, cookedPercentage: ra.cookedPercentage, power: powerA },
-    b: { id: rb.id, archetype: rb.archetype, cookedPercentage: rb.cookedPercentage, power: powerB },
+    a: { id: ra.id, archetype: ra.archetype, emoji: ra.diagnostic.archetypeEmoji ?? "🍳", cookedPercentage: ra.cookedPercentage, power: powerA },
+    b: { id: rb.id, archetype: rb.archetype, emoji: rb.diagnostic.archetypeEmoji ?? "🍳", cookedPercentage: rb.cookedPercentage, power: powerB },
     tie,
     winnerId: tie ? null : winner.id,
     loserId: tie ? null : loser.id,

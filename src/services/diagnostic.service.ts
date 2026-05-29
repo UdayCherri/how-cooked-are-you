@@ -92,6 +92,7 @@ export function generateDiagnostic(params: {
 
   return {
     title: archetype.title,
+    archetypeEmoji: archetype.emoji,
     tagline: archetype.tagline,
     summary,
     fakeDiagnosis,

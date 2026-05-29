@@ -1,43 +1,44 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { GameResult } from "./data/gameData";
 import {
   ApiError,
   analyzeQuiz,
   fetchQuestions,
   fetchResultById,
-  type ApiAnswer,
   type ApiQuestion,
-  type ApiResult,
 } from "./lib/api";
-import {
-  apiResultToQuizResult,
-  type QuizResult,
-} from "./data/quizData";
-import { LandingPage } from "./components/LandingPage";
-import { QuizFlow } from "./components/QuizFlow";
-import { LoadingScreen } from "./components/LoadingScreen";
-import { ResultsDashboard } from "./components/ResultsDashboard";
+import { buildResultFromApi, toBackendAnswers } from "./lib/adapt";
+import { LandingScreen } from "./components/LandingScreen";
+import { SessionScreen } from "./components/SessionScreen";
+import { ResultsScreen } from "./components/ResultsScreen";
 import { HistoryScreen } from "./components/HistoryScreen";
-import { ErrorScreen } from "./components/ErrorScreen";
-import { BootScreen } from "./components/BootScreen";
+import { BattleScreen } from "./components/BattleScreen";
+import { MachineFace } from "./components/MachineFace";
 
-type Screen = "boot" | "landing" | "quiz" | "loading" | "results" | "history" | "error";
+type Screen =
+  | "boot"
+  | "landing"
+  | "session"
+  | "analyzing"
+  | "results"
+  | "history"
+  | "battle"
+  | "error";
 
-const HISTORY_KEY = "hcay_history";
-const HISTORY_LIMIT = 20;
+const HISTORY_KEY = "hcay_v2_history";
+const HISTORY_LIMIT = 30;
 
-function loadHistory(): QuizResult[] {
+function loadHistory(): GameResult[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as QuizResult[]) : [];
+    return raw ? (JSON.parse(raw) as GameResult[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveHistory(history: QuizResult[]) {
+function saveHistory(history: GameResult[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   } catch {
@@ -51,32 +52,101 @@ function getSharedId(): string | null {
   return m ? m[1]! : null;
 }
 
-const PAGE_TRANSITION = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -16 },
-  transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] as const },
+const TRANSITION = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.25 },
 };
+
+// ── Small full-screen status views, in the machine's monospace aesthetic ──────
+function StatusView({
+  expression,
+  title,
+  lines,
+  accent,
+  action,
+}: {
+  expression: "neutral" | "glitching" | "judging" | "concerned" | "shocked";
+  title: string;
+  lines: string[];
+  accent: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-6"
+      style={{ background: "#080808", fontFamily: "'DM Sans', sans-serif" }}
+    >
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px)",
+        }}
+      />
+      <MachineFace expression={expression} size="lg" />
+      <div className="relative z-10 flex flex-col items-center gap-2 max-w-sm">
+        <h2
+          style={{
+            fontFamily: "'Fredoka', sans-serif",
+            fontSize: "1.4rem",
+            fontWeight: 700,
+            color: accent,
+          }}
+        >
+          {title}
+        </h2>
+        {lines.map((l, i) => (
+          <p
+            key={i}
+            style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: "0.72rem",
+              color: "#777",
+              lineHeight: 1.7,
+            }}
+          >
+            {l}
+          </p>
+        ))}
+      </div>
+      {action && (
+        <motion.button
+          whileHover={{ x: 3 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={action.onClick}
+          className="relative z-10 px-6 py-3 cursor-pointer"
+          style={{
+            background: accent,
+            border: `2px solid ${accent}`,
+            boxShadow: `3px 3px 0 0 ${accent}40`,
+            fontFamily: "'Fredoka', sans-serif",
+            fontSize: "1rem",
+            fontWeight: 700,
+            color: "#080808",
+          }}
+        >
+          {action.label}
+        </motion.button>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("boot");
   const [questions, setQuestions] = useState<ApiQuestion[]>([]);
-  const [pendingAnswers, setPendingAnswers] = useState<ApiAnswer[]>([]);
-  const [currentResult, setCurrentResult] = useState<QuizResult | null>(null);
-  const [sharedResult, setSharedResult] = useState<boolean>(false);
-  const [history, setHistory] = useState<QuizResult[]>(loadHistory);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [currentResult, setCurrentResult] = useState<GameResult | null>(null);
+  const [history, setHistory] = useState<GameResult[]>(loadHistory);
+  const [errorMsg, setErrorMsg] = useState("");
+  const bootRan = useRef(false);
 
-  const analyzePromiseRef = useRef<Promise<ApiResult> | null>(null);
-  const bootRanRef = useRef(false);
-
-  // Initial boot: fetch questions + handle /r/:id share link
+  // Boot: fetch the backend question deck + resolve any /r/:id share link.
   useEffect(() => {
-    if (bootRanRef.current) return;
-    bootRanRef.current = true;
-
+    if (bootRan.current) return;
+    bootRan.current = true;
     const sharedId = getSharedId();
-
     (async () => {
       try {
         const [{ questions: qs }, shared] = await Promise.all([
@@ -84,79 +154,63 @@ export default function App() {
           sharedId ? fetchResultById(sharedId).catch(() => null) : Promise.resolve(null),
         ]);
         setQuestions(qs);
-
         if (sharedId && shared) {
-          setCurrentResult(apiResultToQuizResult(shared));
-          setSharedResult(true);
+          setCurrentResult(buildResultFromApi(shared));
           setScreen("results");
           return;
         }
         if (sharedId && !shared) {
-          // bad share id — fall back to landing with a soft warning
           window.history.replaceState(null, "", "/");
-          setErrorMsg("That share link is cooked beyond recognition. We dropped you on the home screen.");
         }
         setScreen("landing");
       } catch (err) {
-        const msg = err instanceof ApiError ? err.message : "could not reach the server";
-        setErrorMsg(msg);
+        setErrorMsg(err instanceof ApiError ? err.message : "could not reach the diagnostic server");
         setScreen("error");
       }
     })();
   }, []);
 
-  const handleStartQuiz = useCallback(() => {
-    setPendingAnswers([]);
-    setSharedResult(false);
-    setCurrentResult(null);
-    setScreen("quiz");
-  }, []);
-
-  const handleQuizComplete = useCallback((answers: ApiAnswer[]) => {
-    setPendingAnswers(answers);
-    // Kick off analyze in parallel with the loading screen animation
-    analyzePromiseRef.current = analyzeQuiz({ answers });
-    setScreen("loading");
-  }, []);
-
-  const handleLoadingComplete = useCallback(async () => {
-    try {
-      const promise = analyzePromiseRef.current ?? analyzeQuiz({ answers: pendingAnswers });
-      const apiResult = await promise;
-      const result = apiResultToQuizResult(apiResult, pendingAnswers);
-
-      setCurrentResult(result);
-      setSharedResult(false);
-      setHistory((prev) => {
-        const next = [result, ...prev.filter((r) => r.id !== result.id)].slice(0, HISTORY_LIMIT);
-        saveHistory(next);
-        return next;
-      });
-      setScreen("results");
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "the diagnosis failed mid-cook";
-      setErrorMsg(msg);
-      setScreen("error");
-    } finally {
-      analyzePromiseRef.current = null;
-    }
-  }, [pendingAnswers]);
+  // The session hands back a locally-assembled GameResult; we use only its
+  // session data (answers + bespoke evidence) and let the backend judge.
+  const handleSessionComplete = useCallback(
+    async (local: GameResult) => {
+      setScreen("analyzing");
+      try {
+        const answers = toBackendAnswers(local.questionAnswers, questions);
+        const api = await analyzeQuiz({ answers });
+        const result = buildResultFromApi(api, {
+          questionAnswers: local.questionAnswers,
+          evidence: local.evidence,
+          bossChoiceIdx: local.bossChoiceIdx,
+          bossEventId: local.bossEventId,
+        });
+        setCurrentResult(result);
+        setHistory((prev) => {
+          const next = [result, ...prev.filter((r) => r.id !== result.id)].slice(0, HISTORY_LIMIT);
+          saveHistory(next);
+          return next;
+        });
+        setScreen("results");
+      } catch (err) {
+        setErrorMsg(
+          err instanceof ApiError ? err.message : "the diagnosis failed to transmit. try again."
+        );
+        setScreen("error");
+      }
+    },
+    [questions]
+  );
 
   const handleRetry = useCallback(() => {
-    if (sharedResult) {
-      // Came in via shared link — strip the URL and go home
+    if (currentResult?.shared) {
       window.history.replaceState(null, "", "/");
-      setSharedResult(false);
     }
     setCurrentResult(null);
     setScreen("landing");
-  }, [sharedResult]);
+  }, [currentResult]);
 
-  const handleViewHistory = useCallback(() => setScreen("history"), []);
-
-  const handleViewHistoryResult = useCallback((result: QuizResult) => {
+  const handleViewHistoryResult = useCallback((result: GameResult) => {
     setCurrentResult(result);
-    setSharedResult(false);
     setScreen("results");
   }, []);
 
@@ -165,92 +219,120 @@ export default function App() {
     saveHistory([]);
   }, []);
 
-  const handleRecoverFromError = useCallback(() => {
-    if (questions.length === 0) {
-      // never got off the ground — full reload is the cleanest recovery
-      window.location.assign("/");
-      return;
-    }
-    setErrorMsg("");
-    window.history.replaceState(null, "", "/");
-    setSharedResult(false);
-    setCurrentResult(null);
-    setScreen("landing");
-  }, [questions.length]);
-
   return (
-    <div
-      className="size-full"
-      style={{
-        background: "#0D0D0D",
-        overflowY: "auto",
-        overflowX: "hidden",
-      }}
-    >
-      <AnimatePresence mode="wait">
-        {screen === "boot" && (
-          <motion.div key="boot" {...PAGE_TRANSITION} className="min-h-full">
-            <BootScreen />
-          </motion.div>
-        )}
+    <>
+      <style>{`
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1A1A1A; }
+      `}</style>
 
-        {screen === "landing" && (
-          <motion.div key="landing" {...PAGE_TRANSITION} className="min-h-full">
-            <LandingPage
-              onStart={handleStartQuiz}
-              onHistory={handleViewHistory}
-              historyCount={history.length}
-              questionCount={questions.length}
-              noticeMsg={errorMsg || null}
-              onDismissNotice={() => setErrorMsg("")}
-            />
-          </motion.div>
-        )}
+      <div
+        className="size-full"
+        style={{ background: "#080808", overflowY: "auto", overflowX: "hidden" }}
+      >
+        <AnimatePresence mode="wait">
+          {screen === "boot" && (
+            <motion.div key="boot" {...TRANSITION} className="min-h-full">
+              <StatusView
+                expression="neutral"
+                accent="#B983FF"
+                title="BOOTING DIAGNOSTIC"
+                lines={["Establishing connection to the machine…"]}
+              />
+            </motion.div>
+          )}
 
-        {screen === "quiz" && (
-          <motion.div key="quiz" {...PAGE_TRANSITION} className="min-h-full">
-            <QuizFlow
-              questions={questions}
-              onComplete={handleQuizComplete}
-              onBack={() => setScreen("landing")}
-            />
-          </motion.div>
-        )}
+          {screen === "landing" && (
+            <motion.div key="landing" {...TRANSITION} className="min-h-full">
+              <LandingScreen
+                onStart={() => setScreen("session")}
+                onHistory={() => setScreen("history")}
+                historyCount={history.length}
+              />
+            </motion.div>
+          )}
 
-        {screen === "loading" && (
-          <motion.div key="loading" {...PAGE_TRANSITION} className="min-h-full">
-            <LoadingScreen onComplete={handleLoadingComplete} />
-          </motion.div>
-        )}
+          {screen === "session" && (
+            <motion.div key="session" {...TRANSITION} className="min-h-full">
+              <SessionScreen onComplete={handleSessionComplete} />
+            </motion.div>
+          )}
 
-        {screen === "results" && currentResult && (
-          <motion.div key="results" {...PAGE_TRANSITION} className="min-h-full">
-            <ResultsDashboard
-              result={currentResult}
-              shared={sharedResult}
-              onRetry={handleRetry}
-              onHistory={handleViewHistory}
-            />
-          </motion.div>
-        )}
+          {screen === "analyzing" && (
+            <motion.div key="analyzing" {...TRANSITION} className="min-h-full">
+              <StatusView
+                expression="glitching"
+                accent="#B983FF"
+                title="COMPILING FINAL ASSESSMENT"
+                lines={[
+                  "Transmitting case file to central diagnostic…",
+                  "Cross-referencing the evidence board.",
+                  "The verdict is being prepared.",
+                ]}
+              />
+            </motion.div>
+          )}
 
-        {screen === "history" && (
-          <motion.div key="history" {...PAGE_TRANSITION} className="min-h-full">
-            <HistoryScreen
-              history={history}
-              onBack={() => setScreen(currentResult ? "results" : "landing")}
-              onViewResult={handleViewHistoryResult}
-              onClearHistory={handleClearHistory}
-            />
-          </motion.div>
-        )}
+          {screen === "results" && currentResult && (
+            <motion.div key="results" {...TRANSITION} className="min-h-full">
+              <ResultsScreen
+                result={currentResult}
+                onRetry={handleRetry}
+                onHistory={() => setScreen("history")}
+                onBattle={() => setScreen("battle")}
+              />
+            </motion.div>
+          )}
 
-        {screen === "error" && (
-          <motion.div key="error" {...PAGE_TRANSITION} className="min-h-full">
-            <ErrorScreen message={errorMsg} onRetry={handleRecoverFromError} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+          {screen === "history" && (
+            <motion.div key="history" {...TRANSITION} className="min-h-full">
+              <HistoryScreen
+                history={history}
+                onBack={() => setScreen(currentResult ? "results" : "landing")}
+                onViewResult={handleViewHistoryResult}
+                onClearHistory={handleClearHistory}
+              />
+            </motion.div>
+          )}
+
+          {screen === "battle" && currentResult && (
+            <motion.div key="battle" {...TRANSITION} className="min-h-full">
+              <BattleScreen
+                current={currentResult}
+                history={history}
+                onBack={() => setScreen("results")}
+              />
+            </motion.div>
+          )}
+
+          {screen === "error" && (
+            <motion.div key="error" {...TRANSITION} className="min-h-full">
+              <StatusView
+                expression="concerned"
+                accent="#FF6B6B"
+                title="DIAGNOSTIC ERROR"
+                lines={[errorMsg || "something went wrong.", "the machine will reset."]}
+                action={{
+                  label: "↻ RESET",
+                  onClick: () => {
+                    if (questions.length === 0) {
+                      window.location.assign("/");
+                      return;
+                    }
+                    window.history.replaceState(null, "", "/");
+                    setErrorMsg("");
+                    setCurrentResult(null);
+                    setScreen("landing");
+                  },
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }
